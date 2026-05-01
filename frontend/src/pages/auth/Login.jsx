@@ -1,0 +1,131 @@
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
+
+export function Login() {
+  const [isMentor, setIsMentor] = useState(true);
+  const [identifier, setIdentifier] = useState(''); // email for mentor, USN for student
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname;
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const email = isMentor ? identifier : `${identifier.toLowerCase()}@forgetrack.local`;
+      
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) throw signInError;
+
+      // Check if student's password is the default (USN)
+      if (!isMentor && password === identifier) {
+        navigate('/change-password', { replace: true });
+        return;
+      }
+
+      // Determine routing based on role (fetched from user metadata or fallback)
+      const role = data.user?.user_metadata?.role || (isMentor ? 'mentor' : 'student');
+      
+      if (from) {
+        navigate(from, { replace: true });
+      } else {
+        navigate(role === 'mentor' ? '/dashboard' : '/me/attendance', { replace: true });
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError('Invalid credentials or account not found.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-void bg-[image:var(--glow-cosmic)] flex flex-col items-center justify-center p-4 font-body text-primary">
+      <div className="mb-8 text-center">
+        <h1 className="text-display-md mb-2">ForgeTrack</h1>
+        <p className="text-secondary text-body-lg">Sign in to your account</p>
+      </div>
+
+      <div className="bg-surface bg-[image:var(--card-gradient)] rounded-2xl shadow-[var(--shadow-card)] p-8 md:p-12 w-full max-w-[440px] border border-border-subtle">
+        
+        {/* Toggle */}
+        <div className="flex p-1 bg-surface-inset rounded-lg mb-8 border border-border-default">
+          <button 
+            type="button"
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${isMentor ? 'bg-surface-raised text-primary shadow-sm border border-border-subtle' : 'text-secondary hover:text-primary'}`}
+            onClick={() => { setIsMentor(true); setIdentifier(''); setError(null); }}
+          >
+            Mentor Login
+          </button>
+          <button 
+            type="button"
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${!isMentor ? 'bg-surface-raised text-primary shadow-sm border border-border-subtle' : 'text-secondary hover:text-primary'}`}
+            onClick={() => { setIsMentor(false); setIdentifier(''); setError(null); }}
+          >
+            Student Login
+          </button>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div>
+            <label className="block text-label text-secondary mb-2">
+              {isMentor ? 'EMAIL ADDRESS' : 'USN'}
+            </label>
+            <input 
+              type={isMentor ? 'email' : 'text'}
+              required
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder={isMentor ? 'mentor@forgetrack.local' : '4SH24CS001'} 
+              className={`w-full bg-surface-inset border ${error ? 'border-danger-border' : 'border-border-default'} rounded-md px-4 py-3 text-primary text-[14px] focus:border-accent-glow focus:shadow-focus focus:outline-none transition-all placeholder:text-tertiary`}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-label text-secondary">PASSWORD</label>
+              {isMentor && (
+                <a href="#" className="text-caption text-accent-glow hover:underline">Forgot password?</a>
+              )}
+            </div>
+            <input 
+              type="password" 
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••" 
+              className={`w-full bg-surface-inset border ${error ? 'border-danger-border' : 'border-border-default'} rounded-md px-4 py-3 text-primary text-[14px] focus:border-accent-glow focus:shadow-focus focus:outline-none transition-all placeholder:text-tertiary`}
+            />
+            {!isMentor && (
+              <p className="mt-2 text-caption text-tertiary">Default password is your USN</p>
+            )}
+          </div>
+
+          {error && (
+            <p className="text-caption text-danger-fg text-center">{error}</p>
+          )}
+
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full bg-primary text-inverse rounded-md px-5 py-3 font-medium text-[14px] hover:bg-[#E5E5E7] transition-colors disabled:opacity-50 mt-4"
+          >
+            {loading ? 'Signing In...' : 'Sign In'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
