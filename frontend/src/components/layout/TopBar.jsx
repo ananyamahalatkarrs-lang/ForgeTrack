@@ -1,4 +1,4 @@
-import { useAuth } from '../AuthProvider';
+import { useAuth } from '../../hooks/useAuth';
 import { Search } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
@@ -14,10 +14,10 @@ export function TopBar() {
 
   return (
     <header className="h-16 flex items-center justify-between px-6 lg:px-12 sticky top-0 z-10">
-      <div className="flex items-center text-secondary text-body-sm">
-        <span>Overview</span>
-        <span className="mx-2">/</span>
-        <span className="text-primary">{breadcrumb.replace('-', ' ')}</span>
+      <div className="flex items-center text-primary text-body font-bold">
+        <span>Attendance Portal</span>
+        <span className="mx-3 text-tertiary font-normal">|</span>
+        <span className="text-accent-glow">Welcome, {userProfile?.display_name || 'User'}</span>
       </div>
 
       <div className="flex items-center gap-6">

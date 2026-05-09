@@ -10,16 +10,15 @@ import {
   Settings, 
   LogOut 
 } from 'lucide-react';
-import { useAuth } from '../AuthProvider';
-import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
 
 export function Sidebar() {
-  const { role, userProfile } = useAuth();
+  const { role, userProfile, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     navigate('/login');
   };
 
@@ -47,10 +46,15 @@ export function Sidebar() {
       </div>
 
       <div className="px-6 pb-6 border-b border-border-subtle">
-        <p className="text-label text-tertiary mb-1">WELCOME BACK</p>
-        <p className="text-body font-medium truncate">
-          {userProfile?.display_name || 'Loading...'}
-        </p>
+        <p className="text-label text-tertiary mb-1 uppercase tracking-widest">Signed in as</p>
+        <div className="flex flex-col">
+          <p className="text-body font-bold truncate text-primary">
+            {userProfile?.display_name || 'Loading...'}
+          </p>
+          <span className="inline-flex mt-1 text-[10px] font-bold uppercase tracking-tighter text-accent-glow bg-accent-glow/10 w-fit px-2 py-0.5 rounded border border-accent-glow/20">
+            {role || 'User'}
+          </span>
+        </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -72,7 +76,7 @@ export function Sidebar() {
 
             <div>
               <p className="text-label text-tertiary mb-2 px-2">DATA</p>
-              <NavItem to="/upload" icon={Upload} label="Upload CSV" />
+              <NavItem to="/upload" icon={Upload} label="Bulk Upload" />
             </div>
           </>
         )}

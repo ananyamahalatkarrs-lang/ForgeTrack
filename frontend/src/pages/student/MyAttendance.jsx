@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../components/AuthProvider';
+import { useAuth } from '../../hooks/useAuth';
 import { UserCircle, CheckCircle2, XCircle } from 'lucide-react';
 
 export function MyAttendance() {

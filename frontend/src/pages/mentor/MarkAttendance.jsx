@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
 import { Calendar as CalendarIcon, CheckSquare, AlertTriangle, Save } from 'lucide-react';
 
 export function MarkAttendance() {
+  const { user, role } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [session, setSession] = useState(null);
   const [students, setStudents] = useState([]);
@@ -119,6 +121,11 @@ export function MarkAttendance() {
   };
 
   const executeSave = async () => {
+    if (!user || role !== 'mentor') {
+      alert("Unauthorized: Only mentors can save attendance.");
+      return;
+    }
+
     setSaving(true);
     setShowConfirmModal(false);
     try {
@@ -126,7 +133,7 @@ export function MarkAttendance() {
         session_id: session.id,
         student_id: s.id,
         present: attendanceState[s.id],
-        recorded_by: null // handled by trigger/rls ideally, or let DB default
+        recorded_by: user.id
       }));
 
       const { error } = await supabase

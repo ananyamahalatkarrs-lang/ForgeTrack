@@ -11,8 +11,8 @@ export function RecentActivityCard() {
       try {
         const { data, error } = await supabase
           .from('import_log')
-          .select('id, filename, imported_at, status')
-          .order('imported_at', { ascending: false })
+          .select('id, filename, uploaded_at, status')
+          .order('uploaded_at', { ascending: false })
           .limit(5);
 
         if (error) throw error;
@@ -60,7 +60,7 @@ export function RecentActivityCard() {
                 </p>
                 <div className="flex items-center gap-2">
                   <p className="text-caption text-tertiary">
-                    {new Date(log.imported_at).toLocaleString('en-US', { 
+                    {new Date(log.uploaded_at).toLocaleString('en-US', { 
                       month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
                     })}
                   </p>

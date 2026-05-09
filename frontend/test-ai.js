@@ -1,22 +1,21 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Add hardcoded fallback in case Vite hasn't restarted to pick up .env.local
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyDCRTg2llrHvxr30Q_Wzn3N_AkWAfXp1Tc";
+const genAI = new GoogleGenerativeAI('AIzaSyDCRTg2llrHvxr30Q_Wzn3N_AkWAfXp1Tc');
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-if (!apiKey) {
-  console.warn("Gemini API Key missing. Check your .env.local file.");
-}
+const headers = [
+  'SL NO', 'name', 'email', 'usn', 'admission_number', 'branch_code', 
+  'Joined the Batch', 'Pre Assessment Score(20)', 'Attendance', 'Knowledge(25)', 
+  'Skill(25)', 'Attendance', 'Knowledge(25)', 'Skill(25)'
+];
+const context = [
+  null, null, null, null, null, null, null, null, 'Day 1', null, null, 'Day 2', null, null
+];
+const sampleRows = [
+  [1, 'PAVAN', 'test@test.com', '4SF24CI115', '0707', 'CI', true, 10, true, 15, 17, true, 15, 17]
+];
 
-export const genAI = new GoogleGenerativeAI(apiKey);
-
-/**
- * Uses Gemini to analyze the structure of a spreadsheet and map it to our database schema.
- */
-export async function analyzeSheetStructure(headerInfo, sampleRows) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-  const { headers, context } = headerInfo;
-
-  const prompt = `
+const prompt = `
     Analyze this spreadsheet structure and map it to our Attendance System database.
     
     Database Fields Needed:
@@ -48,22 +47,14 @@ export async function analyzeSheetStructure(headerInfo, sampleRows) {
       "needs_date_inference": boolean,
       "confidence": number
     }
-  `;
+`;
 
+async function run() {
   try {
     const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    
-    // Robust JSON extraction
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("AI did not return a valid JSON object. Content: " + text.slice(0, 100));
-    }
-    
-    return JSON.parse(jsonMatch[0]);
-  } catch (error) {
-    console.error("AI Analysis failed:", error);
-    throw error;
+    console.log("Raw output:", result.response.text());
+  } catch (e) {
+    console.error("Error:", e);
   }
 }
+run();

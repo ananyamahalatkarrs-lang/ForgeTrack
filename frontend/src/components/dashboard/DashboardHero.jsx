@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../AuthProvider';
+import { useAuth } from '../../hooks/useAuth';
 import { BookOpen, UserCheck, Users, CalendarDays } from 'lucide-react';
 
 export function DashboardHero() {

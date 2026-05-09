@@ -1,13 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Hardcoded fallbacks in case .env.local is not picked up
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://mcgextaacccapjgdgqzz.supabase.co";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_IVUwgZvB7mrryVM8SZJzdg_S7IStrc8";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("Supabase credentials missing. Check your .env.local file.");
+if (!import.meta.env.VITE_SUPABASE_URL) {
+  console.warn("Supabase URL missing from env, using hardcoded fallback.");
 }
 
-export const supabase = createClient(
-  supabaseUrl || 'http://placeholder.url',
-  supabaseAnonKey || 'placeholder_key'
-);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
