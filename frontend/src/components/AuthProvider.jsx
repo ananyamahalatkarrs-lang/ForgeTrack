@@ -54,14 +54,14 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true;
 
-    // Absolute failsafe: never stay on loading screen more than 6 seconds
+    // Absolute failsafe: never stay on loading screen more than 10 seconds
     const failsafeTimer = setTimeout(() => {
       if (mounted) {
         console.warn("[AuthProvider] Failsafe triggered — forcing loading=false");
         setLoading(false);
         setStatus("Ready (Timeout)");
       }
-    }, 6000);
+    }, 10000);
 
     // Proactively check session to avoid waiting for the event listener if unauthenticated
     const checkInitialSession = async () => {
@@ -96,7 +96,7 @@ export function AuthProvider({ children }) {
           if (currentSession?.user) {
             setSession(currentSession);
             setStatus("Loading profile...");
-            await resolveProfile(currentSession.user);
+            resolveProfile(currentSession.user);
           } else {
             // No user in session — show login
             setSession(null);

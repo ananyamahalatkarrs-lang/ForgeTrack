@@ -23,6 +23,7 @@ export async function analyzeSheetStructure(headerInfo, sampleRows) {
     - student_name: Column containing the full name
     - student_email: Column containing email address
     - student_usn: Column containing USN (Unique Student Number)
+    - student_branch: Column containing the branch (e.g. CS, AI, IS)
     - attendance_columns: A list of columns that represent attendance for specific dates or sessions.
     
     Headers found in sheet: ${JSON.stringify(headers)}
@@ -41,6 +42,7 @@ export async function analyzeSheetStructure(headerInfo, sampleRows) {
         "student_name_idx": number,
         "student_email_idx": number,
         "student_usn_idx": number,
+        "student_branch_idx": number,
         "attendance_indices": [
           { "index": number, "label": "string", "date": "ISO_DATE_STRING or null" }
         ]
@@ -65,7 +67,7 @@ export async function analyzeSheetStructure(headerInfo, sampleRows) {
   } catch (error) {
     console.warn("AI Analysis failed. Falling back to local heuristic mapping:", error.message);
     
-    let nameIdx = -1, emailIdx = -1, usnIdx = -1;
+    let nameIdx = -1, emailIdx = -1, usnIdx = -1, branchIdx = -1;
     const attendanceIndices = [];
     
     if (headers && Array.isArray(headers)) {
@@ -75,6 +77,7 @@ export async function analyzeSheetStructure(headerInfo, sampleRows) {
         if (lower.includes('name')) nameIdx = i;
         else if (lower.includes('email')) emailIdx = i;
         else if (lower.includes('usn')) usnIdx = i;
+        else if (lower.includes('branch') || lower.includes('dept')) branchIdx = i;
         else if (lower.includes('day') || lower.includes('session') || lower.includes('date') || lower.includes('att') || /\d/.test(h)) {
           attendanceIndices.push({ index: i, label: h, date: null });
         }
@@ -85,13 +88,15 @@ export async function analyzeSheetStructure(headerInfo, sampleRows) {
     if (nameIdx === -1) nameIdx = 0;
     if (emailIdx === -1) emailIdx = 1;
     if (usnIdx === -1) usnIdx = 2;
+    if (branchIdx === -1) branchIdx = 3;
 
     return {
       mappings: {
         student_name_idx: nameIdx,
         student_email_idx: emailIdx,
         student_usn_idx: usnIdx,
-        attendance_indices: attendanceIndices.length > 0 ? attendanceIndices : [{ index: 3, label: "Day 1", date: null }]
+        student_branch_idx: branchIdx,
+        attendance_indices: attendanceIndices.length > 0 ? attendanceIndices : [{ index: 4, label: "Day 1", date: null }]
       },
       needs_date_inference: true,
       confidence: 0.6

@@ -244,13 +244,34 @@ export function StudentHistory() {
           </div>
         </div>
       ) : (
-        /* Dynamic Empty State */
-        <div className="h-[450px] flex flex-col items-center justify-center text-center bg-surface/20 backdrop-blur-md border border-dashed border-white/10 rounded-[40px] animate-in fade-in duration-1000">
-          <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center text-tertiary mb-6 border border-white/10 shadow-lg animate-bounce duration-[3000ms]">
-            <Search className="w-10 h-10 opacity-30" />
-          </div>
-          <h3 className="text-h3 text-primary tracking-tight">Tracing Ready</h3>
-          <p className="text-secondary text-body-sm mt-2 max-w-xs px-6">Input a student USN or name to visualize their real-time performance metrics.</p>
+        /* Student Grid */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in duration-700">
+          {filteredStudents.length > 0 ? (
+            filteredStudents.map(student => (
+              <div 
+                key={student.id}
+                onClick={() => { setSelectedStudent(student); setSearchTerm(student.name); }}
+                className="bg-surface/30 backdrop-blur-md border border-white/10 rounded-[24px] p-6 shadow-card hover:border-accent-glow/50 hover:bg-white/5 transition-all cursor-pointer group flex flex-col items-center text-center"
+              >
+                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-primary border border-white/10 group-hover:border-accent-glow/50 mb-4 transition-colors">
+                  <UserCircle className="w-8 h-8 text-tertiary group-hover:text-accent-glow transition-colors" />
+                </div>
+                <h3 className="text-body-lg font-bold text-primary mb-1">{student.name}</h3>
+                <p className="text-caption font-mono text-tertiary uppercase tracking-widest">{student.usn}</p>
+                <div className="mt-4 px-3 py-1 rounded-full bg-white/5 border border-white/5 text-[10px] text-secondary font-medium tracking-wide group-hover:bg-accent-glow/10 group-hover:text-accent-glow group-hover:border-accent-glow/20 transition-all">
+                  View History
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full h-[300px] flex flex-col items-center justify-center text-center bg-surface/20 backdrop-blur-md border border-dashed border-white/10 rounded-[40px]">
+              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-tertiary mb-4 border border-white/10">
+                <Search className="w-6 h-6 opacity-30" />
+              </div>
+              <h3 className="text-h3 text-primary tracking-tight">No Students Found</h3>
+              <p className="text-secondary text-body-sm mt-2">Try adjusting your search query.</p>
+            </div>
+          )}
         </div>
       )}
     </div>

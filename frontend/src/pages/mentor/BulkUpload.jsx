@@ -140,16 +140,33 @@ export function BulkUpload() {
     }
   };
 
+  const [importedStudents, setImportedStudents] = useState([]);
+
   const processUpload = async () => {
     setStep('progress');
     setLoading(true);
+    setError(null);
+    const newImportedNames = [];
+    
     try {
+      // 0. FIRST DELETE ALL EXISTING STUDENTS (Fresh Start as requested)
+      setProgress({ current: 0, total: 100, label: 'Clearing existing students...' });
+      const { error: deleteError } = await supabase
+        .from('students')
+        .delete()
+        .filter('id', 'gt', 0); // Delete all students
+      
+      if (deleteError) {
+        console.error("Delete Error:", deleteError);
+        throw new Error("Failed to clear existing students: " + deleteError.message);
+      }
+
       for (const sheetName of selectedSheets) {
         const sheet = workbook.Sheets[sheetName];
         const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
         const { mappings, headerIdx } = analysis;
         
-        const rows = rawData.slice(headerIdx + 1);
+        const rows = rawData.slice(headerIdx + 1).filter(r => r.length > 0);
         const totalRows = rows.length;
         
         setProgress({ current: 0, total: totalRows, label: `Processing ${sheetName}...` });
@@ -190,7 +207,8 @@ export function BulkUpload() {
               date: s.date, 
               topic: s.label || `Session ${s.date}`,
               session_type: 'offline',
-              duration_hours: 2
+              duration_hours: 2,
+              month_number: new Date(s.date).getMonth() + 1
             }, { onConflict: 'date' })
             .select()
             .single();
@@ -204,55 +222,55 @@ export function BulkUpload() {
           const batch = rows.slice(i, i + batchSize);
           
           for (const row of batch) {
-            const name = row[mappings.student_name_idx];
-            const email = row[mappings.student_email_idx];
-            const usn = row[mappings.student_usn_idx];
+            // Robust extraction of student info
+            const name = row[mappings.student_name_idx]?.toString()?.trim();
+            const usn = row[mappings.student_usn_idx]?.toString()?.trim();
+            const email = row[mappings.student_email_idx]?.toString()?.trim();
+            const branch = row[mappings.student_branch_idx]?.toString()?.trim() || 'CS';
 
-            if (!name || !usn) continue;
+            if (!name || !usn) {
+              console.warn("Skipping row due to missing name or USN:", row);
+              continue;
+            }
 
-            // Upsert Student
-
-            let student, sErr;
+            // Insert Student (Using insert because we already deleted all students)
+            let studentData;
             try {
-              const result = await supabase
+              const { data, error: stuErr } = await supabase
                 .from('students')
-                .upsert({ 
+                .insert({ 
                   name, 
                   email: email || `${usn.toLowerCase()}@forgetrack.app`, 
                   usn,
+                  branch_code: branch,
                   is_active: true
-                }, { onConflict: 'usn' })
+                })
                 .select()
                 .single();
-              student = result.data;
-              sErr = result.error;
-              if (sErr) {
-                throw sErr;
-              }
+              
+              if (stuErr) throw stuErr;
+              studentData = data;
+              newImportedNames.push(name);
             } catch (stuErr) {
-              console.error("Student upsert error:", stuErr, row);
-              setError("Student upload failed: " + (stuErr.message || stuErr.toString()));
+              console.error("Student insert error:", stuErr, row);
               continue;
             }
 
             // Prepare Attendance for this student
             const attendanceRecords = createdSessions.map(s => ({
               session_id: s.dbId,
-              student_id: student.id,
+              student_id: studentData.id,
               present: !!row[s.idx],
-              recorded_by: user.id
+              marked_by: 'system'
             }));
 
             try {
               const { error: attErr } = await supabase
                 .from('attendance')
                 .upsert(attendanceRecords, { onConflict: 'session_id, student_id' });
-              if (attErr) {
-                throw attErr;
-              }
+              if (attErr) throw attErr;
             } catch (attErr) {
               console.error("Attendance upsert error:", attErr, row);
-              setError("Attendance upload failed: " + (attErr.message || attErr.toString()));
               continue;
             }
           }
@@ -260,9 +278,10 @@ export function BulkUpload() {
           setProgress(prev => ({ ...prev, current: Math.min(i + batchSize, totalRows) }));
         }
       }
+      setImportedStudents(newImportedNames);
       setStep('success');
     } catch (err) {
-      console.error(err);
+      console.error("Upload Error:", err);
       setError("Upload failed: " + err.message);
     } finally {
       setLoading(false);
@@ -422,6 +441,7 @@ export function BulkUpload() {
                       <tr>
                         <th className="px-4 py-3 text-micro text-tertiary font-bold uppercase tracking-wider">Name</th>
                         <th className="px-4 py-3 text-micro text-tertiary font-bold uppercase tracking-wider">USN</th>
+                        <th className="px-4 py-3 text-micro text-tertiary font-bold uppercase tracking-wider">Branch</th>
                         <th className="px-4 py-3 text-micro text-tertiary font-bold uppercase tracking-wider">Email (if any)</th>
                         <th className="px-4 py-3 text-micro text-tertiary font-bold uppercase tracking-wider text-right">Sample Attendance</th>
                       </tr>
@@ -431,6 +451,7 @@ export function BulkUpload() {
                         <tr key={i} className="hover:bg-surface-inset transition-colors">
                           <td className="px-4 py-3 text-body-sm font-medium text-primary">{row[analysis.mappings.student_name_idx] || '—'}</td>
                           <td className="px-4 py-3 text-body-sm text-secondary font-mono">{row[analysis.mappings.student_usn_idx] || '—'}</td>
+                          <td className="px-4 py-3 text-body-sm text-secondary uppercase">{row[analysis.mappings.student_branch_idx] || '—'}</td>
                           <td className="px-4 py-3 text-body-sm text-secondary">{row[analysis.mappings.student_email_idx] || '—'}</td>
                           <td className="px-4 py-3 text-body-sm text-secondary text-right">
                             {analysis.mappings.attendance_indices.slice(0, 3).map(att => (
@@ -527,24 +548,44 @@ export function BulkUpload() {
         )}
 
         {step === 'success' && (
-          <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center text-success mb-6">
-              <CheckCircle2 className="w-10 h-10" />
+          <div className="flex-1 flex flex-col items-center justify-center py-8 text-center">
+            <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center text-success mb-4">
+              <CheckCircle2 className="w-8 h-8" />
             </div>
             <h3 className="text-display-sm text-primary mb-2">Sync Complete!</h3>
-            <p className="text-body-sm text-secondary mb-10 max-w-sm">
-              All students and attendance records have been successfully imported and matched.
+            <p className="text-body-sm text-secondary mb-6">
+              {importedStudents.length} students have been successfully imported and matched.
             </p>
+
+            {/* Imported Students List */}
+            <div className="w-full max-w-md mb-8">
+              <div className="bg-surface-inset rounded-2xl border border-border-subtle p-4">
+                <p className="text-micro font-bold text-tertiary uppercase tracking-widest mb-3 text-left">Imported Students</p>
+                <div className="max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="grid grid-cols-1 gap-2">
+                    {importedStudents.map((name, idx) => (
+                      <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-surface rounded-lg border border-border-subtle text-left">
+                        <div className="w-6 h-6 rounded-full bg-primary/5 flex items-center justify-center text-[10px] font-bold text-primary">
+                          {idx + 1}
+                        </div>
+                        <span className="text-body-sm font-medium text-primary">{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex gap-4">
               <button 
                 onClick={() => window.location.href = '/dashboard'}
-                className="bg-primary text-inverse px-8 py-3 rounded-xl font-medium"
+                className="bg-primary text-inverse px-8 py-3 rounded-xl font-medium hover:scale-105 transition-transform"
               >
                 Go to Dashboard
               </button>
               <button 
                 onClick={() => setStep('upload')}
-                className="bg-surface-raised border border-border-default px-8 py-3 rounded-xl font-medium text-primary"
+                className="bg-surface-raised border border-border-default px-8 py-3 rounded-xl font-medium text-primary hover:bg-surface transition-colors"
               >
                 Upload Another
               </button>

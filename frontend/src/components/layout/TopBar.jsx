@@ -3,7 +3,7 @@ import { Search } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 export function TopBar() {
-  const { userProfile } = useAuth();
+  const { userProfile, signOut } = useAuth();
   const location = useLocation();
 
   // Simple breadcrumb generator based on path
@@ -37,9 +37,14 @@ export function TopBar() {
             <p className="text-body-sm font-medium text-primary">{userProfile?.display_name || 'User'}</p>
             <p className="text-caption text-tertiary capitalize">{userProfile?.role || 'Guest'}</p>
           </div>
-          <div className="w-10 h-10 rounded-full bg-surface-raised border border-border-default flex items-center justify-center text-primary font-medium">
-            {userProfile?.display_name?.charAt(0).toUpperCase() || 'U'}
-          </div>
+          <button 
+            onClick={() => signOut()}
+            title="Logout"
+            className="w-10 h-10 rounded-full bg-surface-raised border border-border-default flex items-center justify-center text-primary font-medium hover:bg-danger-fg/10 hover:text-danger-fg hover:border-danger-border transition-colors group"
+          >
+            <span className="group-hover:hidden">{userProfile?.display_name?.charAt(0).toUpperCase() || 'U'}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 hidden group-hover:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          </button>
         </div>
       </div>
     </header>

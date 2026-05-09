@@ -33,54 +33,6 @@ export function Login() {
       });
 
       if (signInError) {
-        // If no account exists, auto-register it
-        if (
-          signInError.message.toLowerCase().includes('invalid login credentials') ||
-          signInError.message.toLowerCase().includes('user not found')
-        ) {
-          setInfo('Account not found — creating your account...');
-          const displayName = isMentor
-            ? identifier.split('@')[0]
-            : identifier.toUpperCase();
-
-          const { error: signUpError } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                role: isMentor ? 'mentor' : 'student',
-                display_name: displayName,
-              },
-            },
-          });
-
-          if (signUpError) {
-            // Email confirmation may be required
-            if (signUpError.message.toLowerCase().includes('already registered')) {
-              throw new Error('Account exists but password is wrong. Please check your password.');
-            }
-            throw signUpError;
-          }
-
-          // Try signing in immediately after registration
-          const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
-
-          if (retryError) {
-            // Email confirmation is required — tell the user
-            throw new Error(
-              'Account created! Please check your email to confirm your account, then sign in again.'
-            );
-          }
-
-          // Signed in successfully after registration
-          const role = retryData.user?.user_metadata?.role || (isMentor ? 'mentor' : 'student');
-          navigate(from || (role === 'mentor' ? '/dashboard' : '/me/attendance'), { replace: true });
-          return;
-        }
-
         throw signInError;
       }
 
@@ -95,10 +47,18 @@ export function Login() {
 
     } catch (err) {
       console.error('Login Error:', err);
-      setError(err.message || 'Sign in failed. Please check your credentials.');
+      // Friendly message for rate limits
+      if (err.message?.toLowerCase().includes('rate limit')) {
+         setError('Too many login attempts. Please wait a few minutes and try again.');
+      } else if (err.message?.toLowerCase().includes('invalid login credentials')) {
+         setError('Invalid email/USN or password.');
+      } else if (err.message?.toLowerCase().includes('email not confirmed')) {
+         setError('Email not confirmed. Please disable "Confirm Email" in Supabase Auth settings.');
+      } else {
+         setError(err.message || 'Sign in failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
-      setInfo(null);
     }
   };
 
