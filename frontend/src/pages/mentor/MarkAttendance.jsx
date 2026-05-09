@@ -5,7 +5,7 @@ import { Calendar as CalendarIcon, CheckSquare, AlertTriangle, Save } from 'luci
 
 export function MarkAttendance() {
   const { user, role } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [session, setSession] = useState(null);
   const [students, setStudents] = useState([]);
   const [attendanceState, setAttendanceState] = useState({});
@@ -20,7 +20,7 @@ export function MarkAttendance() {
 
   // Constants for Date Picker
   const MIN_DATE = '2025-08-04';
-  const MAX_DATE = new Date().toISOString().split('T')[0];
+  const MAX_DATE = new Date().toLocaleDateString('en-CA');
 
   useEffect(() => {
     fetchDataForDate(selectedDate);

@@ -24,6 +24,7 @@ export function BulkUpload() {
   const [step, setStep] = useState('upload'); // upload, select_sheets, analyze, review, progress, success
   
   const [analysis, setAnalysis] = useState(null);
+  const [sampleData, setSampleData] = useState([]);
   const [inferenceData, setInferenceData] = useState({ startDate: '', classDays: ['Mon', 'Wed', 'Fri'] });
   const [duplicateWarnings, setDuplicateWarnings] = useState([]);
   
@@ -83,32 +84,56 @@ export function BulkUpload() {
       const contextHeaders = headerIdx > 0 ? rawData[headerIdx - 1] : null;
       const sampleRows = rawData.slice(headerIdx + 1, headerIdx + 6); // More samples for better AI reasoning
       
-      const aiResponse = await analyzeSheetStructure(
-        { headers, context: contextHeaders }, 
-        sampleRows
-      );
-      setAnalysis({ ...aiResponse, headerIdx });
-      
-      // ... rest of the code ...
-      const datesToCheck = aiResponse.mappings.attendance_indices
-        .map(a => a.date)
-        .filter(d => d !== null);
-      
-      if (datesToCheck.length > 0) {
-        const { data: existingSessions } = await supabase
-          .from('sessions')
-          .select('date, topic')
-          .in('date', datesToCheck);
+      let aiResponse;
+      try {
+        aiResponse = await analyzeSheetStructure(
+          { headers, context: contextHeaders }, 
+          sampleRows
+        );
+        setAnalysis({ ...aiResponse, headerIdx });
         
-        if (existingSessions?.length > 0) {
-          setDuplicateWarnings(existingSessions);
-        }
+        // Store first 4 rows for preview
+        const dataRows = rawData.slice(headerIdx + 1, headerIdx + 5).filter(r => r.length > 0);
+        setSampleData(dataRows);
+      } catch (aiErr) {
+        console.error("AI mapping error:", aiErr);
+        setError("AI mapping failed: " + (aiErr.message || aiErr.toString()));
+        setStep('select_sheets');
+        setLoading(false);
+        return;
       }
 
-      setStep('review');
+      // Log raw AI response for debugging
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('AI Response:', aiResponse);
+      }
+
+      try {
+        const datesToCheck = aiResponse.mappings.attendance_indices
+          .map(a => a.date)
+          .filter(d => d !== null);
+
+        if (datesToCheck.length > 0) {
+          const { data: existingSessions, error: sessionErr } = await supabase
+            .from('sessions')
+            .select('date, topic')
+            .in('date', datesToCheck);
+          if (sessionErr) {
+            throw sessionErr;
+          }
+          if (existingSessions?.length > 0) {
+            setDuplicateWarnings(existingSessions);
+          }
+        }
+        setStep('review');
+      } catch (dbErr) {
+        console.error("Supabase fetch error:", dbErr);
+        setError("Supabase fetch failed: " + (dbErr.message || dbErr.toString()));
+        setStep('select_sheets');
+      }
     } catch (err) {
-      console.error(err);
-      setError(err.message || "AI analysis failed. Please try again.");
+      console.error("General error:", err);
+      setError((err && err.message) ? err.message : "Unknown error during analysis. Please try again.");
       setStep('select_sheets');
     } finally {
       setLoading(false);
@@ -186,18 +211,29 @@ export function BulkUpload() {
             if (!name || !usn) continue;
 
             // Upsert Student
-            const { data: student, error: sErr } = await supabase
-              .from('students')
-              .upsert({ 
-                name, 
-                email: email || `${usn.toLowerCase()}@forgetrack.app`, 
-                usn,
-                is_active: true
-              }, { onConflict: 'usn' })
-              .select()
-              .single();
 
-            if (sErr) continue;
+            let student, sErr;
+            try {
+              const result = await supabase
+                .from('students')
+                .upsert({ 
+                  name, 
+                  email: email || `${usn.toLowerCase()}@forgetrack.app`, 
+                  usn,
+                  is_active: true
+                }, { onConflict: 'usn' })
+                .select()
+                .single();
+              student = result.data;
+              sErr = result.error;
+              if (sErr) {
+                throw sErr;
+              }
+            } catch (stuErr) {
+              console.error("Student upsert error:", stuErr, row);
+              setError("Student upload failed: " + (stuErr.message || stuErr.toString()));
+              continue;
+            }
 
             // Prepare Attendance for this student
             const attendanceRecords = createdSessions.map(s => ({
@@ -207,9 +243,18 @@ export function BulkUpload() {
               recorded_by: user.id
             }));
 
-            await supabase
-              .from('attendance')
-              .upsert(attendanceRecords, { onConflict: 'session_id, student_id' });
+            try {
+              const { error: attErr } = await supabase
+                .from('attendance')
+                .upsert(attendanceRecords, { onConflict: 'session_id, student_id' });
+              if (attErr) {
+                throw attErr;
+              }
+            } catch (attErr) {
+              console.error("Attendance upsert error:", attErr, row);
+              setError("Attendance upload failed: " + (attErr.message || attErr.toString()));
+              continue;
+            }
           }
 
           setProgress(prev => ({ ...prev, current: Math.min(i + batchSize, totalRows) }));
@@ -364,19 +409,38 @@ export function BulkUpload() {
             </div>
 
             <div className="space-y-6">
-              {/* Mapping Summary */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-xl bg-surface-inset border border-border-default">
-                  <p className="text-micro text-tertiary mb-1 uppercase font-bold">Student Name</p>
-                  <p className="text-body-sm font-medium text-primary">Identified correctly</p>
-                </div>
-                <div className="p-4 rounded-xl bg-surface-inset border border-border-default">
-                  <p className="text-micro text-tertiary mb-1 uppercase font-bold">Student USN</p>
-                  <p className="text-body-sm font-medium text-primary">Identified correctly</p>
-                </div>
-                <div className="p-4 rounded-xl bg-surface-inset border border-border-default">
-                  <p className="text-micro text-tertiary mb-1 uppercase font-bold">Sessions Detected</p>
-                  <p className="text-body-sm font-medium text-primary">{analysis.mappings.attendance_indices.length} Columns</p>
+              {/* Mapping Summary with Data Preview */}
+              <div className="p-6 rounded-2xl bg-surface-inset border border-border-default">
+                <h4 className="font-semibold text-primary mb-4 flex items-center justify-between">
+                  <span>Data Preview</span>
+                  <span className="text-body-sm text-secondary font-normal">{analysis.mappings.attendance_indices.length} Sessions Detected</span>
+                </h4>
+                
+                <div className="overflow-x-auto rounded-xl border border-border-subtle bg-surface">
+                  <table className="w-full text-left">
+                    <thead className="bg-surface-raised border-b border-border-subtle">
+                      <tr>
+                        <th className="px-4 py-3 text-micro text-tertiary font-bold uppercase tracking-wider">Name</th>
+                        <th className="px-4 py-3 text-micro text-tertiary font-bold uppercase tracking-wider">USN</th>
+                        <th className="px-4 py-3 text-micro text-tertiary font-bold uppercase tracking-wider">Email (if any)</th>
+                        <th className="px-4 py-3 text-micro text-tertiary font-bold uppercase tracking-wider text-right">Sample Attendance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-subtle">
+                      {sampleData.map((row, i) => (
+                        <tr key={i} className="hover:bg-surface-inset transition-colors">
+                          <td className="px-4 py-3 text-body-sm font-medium text-primary">{row[analysis.mappings.student_name_idx] || '—'}</td>
+                          <td className="px-4 py-3 text-body-sm text-secondary font-mono">{row[analysis.mappings.student_usn_idx] || '—'}</td>
+                          <td className="px-4 py-3 text-body-sm text-secondary">{row[analysis.mappings.student_email_idx] || '—'}</td>
+                          <td className="px-4 py-3 text-body-sm text-secondary text-right">
+                            {analysis.mappings.attendance_indices.slice(0, 3).map(att => (
+                              <span key={att.index} title={att.label} className={`inline-block w-4 h-4 rounded-full ml-1 border ${row[att.index] ? 'bg-success border-success' : 'border-border-default bg-surface-raised'}`} />
+                            ))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 

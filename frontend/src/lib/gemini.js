@@ -13,7 +13,7 @@ export const genAI = new GoogleGenerativeAI(apiKey);
  * Uses Gemini to analyze the structure of a spreadsheet and map it to our database schema.
  */
 export async function analyzeSheetStructure(headerInfo, sampleRows) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const { headers, context } = headerInfo;
 
   const prompt = `
@@ -63,7 +63,38 @@ export async function analyzeSheetStructure(headerInfo, sampleRows) {
     
     return JSON.parse(jsonMatch[0]);
   } catch (error) {
-    console.error("AI Analysis failed:", error);
-    throw error;
+    console.warn("AI Analysis failed. Falling back to local heuristic mapping:", error.message);
+    
+    let nameIdx = -1, emailIdx = -1, usnIdx = -1;
+    const attendanceIndices = [];
+    
+    if (headers && Array.isArray(headers)) {
+      headers.forEach((h, i) => {
+        if (!h || typeof h !== 'string') return;
+        const lower = h.toLowerCase();
+        if (lower.includes('name')) nameIdx = i;
+        else if (lower.includes('email')) emailIdx = i;
+        else if (lower.includes('usn')) usnIdx = i;
+        else if (lower.includes('day') || lower.includes('session') || lower.includes('date') || lower.includes('att') || /\d/.test(h)) {
+          attendanceIndices.push({ index: i, label: h, date: null });
+        }
+      });
+    }
+
+    // Default to first few columns if not found
+    if (nameIdx === -1) nameIdx = 0;
+    if (emailIdx === -1) emailIdx = 1;
+    if (usnIdx === -1) usnIdx = 2;
+
+    return {
+      mappings: {
+        student_name_idx: nameIdx,
+        student_email_idx: emailIdx,
+        student_usn_idx: usnIdx,
+        attendance_indices: attendanceIndices.length > 0 ? attendanceIndices : [{ index: 3, label: "Day 1", date: null }]
+      },
+      needs_date_inference: true,
+      confidence: 0.6
+    };
   }
 }

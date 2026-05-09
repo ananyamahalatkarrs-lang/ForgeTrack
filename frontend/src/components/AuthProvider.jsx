@@ -11,9 +11,26 @@ export function AuthProvider({ children }) {
 
   // Resolves a user's profile from the public.users table.
   // Falls back gracefully to auth metadata if the DB row doesn't exist yet.
+  // Fast fallback: set role and profile from metadata immediately, then fetch DB profile in background
   const resolveProfile = useCallback(async (authUser) => {
     if (!authUser) return;
 
+    // Fast fallback from metadata
+    const metaRole = authUser.user_metadata?.role;
+    const isStudent = authUser.email?.endsWith('@forgetrack.app');
+    const fallbackRole = metaRole || (isStudent ? 'student' : 'mentor');
+    const displayName = authUser.user_metadata?.display_name || authUser.email?.split('@')[0];
+
+    setRole(fallbackRole);
+    setUserProfile({
+      id: authUser.id,
+      email: authUser.email,
+      role: fallbackRole,
+      display_name: displayName,
+    });
+    setStatus("Ready (Metadata)");
+
+    // Fetch DB profile in background and update if found
     try {
       const { data, error } = await supabase
         .from('users')
@@ -25,22 +42,8 @@ export function AuthProvider({ children }) {
         setRole(data.role);
         setUserProfile(data);
         setStatus("Ready");
-      } else {
-        // Fallback: derive role from auth metadata or email pattern
+      } else if (error) {
         console.warn("[AuthProvider] No DB profile found, using metadata fallback:", error?.message);
-        const metaRole = authUser.user_metadata?.role;
-        const isStudent = authUser.email?.endsWith('@forgetrack.app');
-        const fallbackRole = metaRole || (isStudent ? 'student' : 'mentor');
-        const displayName = authUser.user_metadata?.display_name || authUser.email?.split('@')[0];
-
-        setRole(fallbackRole);
-        setUserProfile({
-          id: authUser.id,
-          email: authUser.email,
-          role: fallbackRole,
-          display_name: displayName,
-        });
-        setStatus("Ready (Fallback)");
       }
     } catch (err) {
       console.error("[AuthProvider] resolveProfile error:", err);

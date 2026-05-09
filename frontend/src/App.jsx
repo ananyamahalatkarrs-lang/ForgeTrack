@@ -1,6 +1,26 @@
 import { Component } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
+
+import { AuthProvider } from './components/AuthProvider';
+import { useAuth } from './hooks/useAuth';
+import { RoleGuard } from './components/RoleGuard';
+import { AppShell } from './components/layout/AppShell';
+
+// Auth Pages
+import { Login } from './pages/auth/Login';
+import { ChangePassword } from './pages/auth/ChangePassword';
+
+// Mentor Pages
+import { Dashboard, MarkAttendance, StudentHistory, Materials, BulkUpload } from './pages/mentor';
+
+// Student Pages
+import { MyAttendance, UpcomingSessions, StudentMaterials } from './pages/student';
+
+// Error Pages
+import { Forbidden } from './pages/errors/Forbidden';
+
+// Root Redirect Component
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -29,25 +49,8 @@ class ErrorBoundary extends Component {
     return this.props.children;
   }
 }
-import { AuthProvider } from './components/AuthProvider';
-import { useAuth } from './hooks/useAuth';
-import { RoleGuard } from './components/RoleGuard';
-import { AppShell } from './components/layout/AppShell';
 
-// Auth Pages
-import { Login } from './pages/auth/Login';
-import { ChangePassword } from './pages/auth/ChangePassword';
 
-// Mentor Pages
-import { Dashboard, MarkAttendance, StudentHistory, Materials, BulkUpload } from './pages/mentor';
-
-// Student Pages
-import { MyAttendance, UpcomingSessions, StudentMaterials } from './pages/student';
-
-// Error Pages
-import { Forbidden } from './pages/errors/Forbidden';
-
-// Root Redirect Component
 function RootRedirect() {
   const { session, role, loading, status } = useAuth();
   

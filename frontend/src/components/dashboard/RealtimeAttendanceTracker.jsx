@@ -7,6 +7,7 @@ export function RealtimeAttendanceTracker() {
   const { user, userProfile, role } = useAuth();
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState({});
+  const [todaySessionId, setTodaySessionId] = useState(null);
   const [loading, setLoading] = useState(true);
   const channelRef = useRef(null);
 
@@ -28,9 +29,30 @@ export function RealtimeAttendanceTracker() {
         
         setStudents(studentsData || []);
         
+        // Fetch Today's Session
+        const today = new Date().toLocaleDateString('en-CA');
+        const { data: sessionData } = await supabase
+          .from('sessions')
+          .select('id')
+          .eq('date', today)
+          .single();
+
+        let existingAtt = {};
+        if (sessionData) {
+          setTodaySessionId(sessionData.id);
+          const { data: attData } = await supabase
+            .from('attendance')
+            .select('student_id, present')
+            .eq('session_id', sessionData.id);
+          
+          if (attData) {
+            attData.forEach(a => existingAtt[a.student_id] = a.present ? 'present' : 'absent');
+          }
+        }
+
         // Initialize local state (Default all to absent)
         const initialState = {};
-        studentsData?.forEach(s => initialState[s.id] = 'absent');
+        studentsData?.forEach(s => initialState[s.id] = existingAtt[s.id] || 'absent');
         setAttendance(initialState);
 
         // 2. Setup Realtime Channel
@@ -63,11 +85,27 @@ export function RealtimeAttendanceTracker() {
     };
   }, []);
 
-  const updateStatus = (studentId, status) => {
+  const updateStatus = async (studentId, status) => {
     if (!user || role !== 'mentor') return;
 
     // Update local state IMMEDIATELY for a snappy, interactive feel
     setAttendance(prev => ({ ...prev, [studentId]: status }));
+
+    // Update Database if there's a session today
+    if (todaySessionId) {
+      try {
+        await supabase
+          .from('attendance')
+          .upsert({
+            session_id: todaySessionId,
+            student_id: studentId,
+            present: status === 'present',
+            recorded_by: user.id
+          }, { onConflict: 'session_id, student_id' });
+      } catch (err) {
+        console.error('Failed to save attendance', err);
+      }
+    }
 
     // Attempt to broadcast to other users
     try {

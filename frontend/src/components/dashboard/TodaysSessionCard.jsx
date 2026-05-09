@@ -11,7 +11,7 @@ export function TodaysSessionCard() {
   useEffect(() => {
     async function fetchSession() {
       try {
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toLocaleDateString('en-CA');
         const { data, error } = await supabase
           .from('sessions')
           .select('*')

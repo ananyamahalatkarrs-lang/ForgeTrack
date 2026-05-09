@@ -9,7 +9,7 @@ export function TodaysAttendanceCard() {
   useEffect(() => {
     async function fetchAttendance() {
       try {
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toLocaleDateString('en-CA');
         
         // Find today's session
         const { data: sessionData } = await supabase
